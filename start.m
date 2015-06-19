@@ -27,10 +27,10 @@ sizex = 10;
 sizey = 5;
 legendpos = 'NorthWest';
 %
-fid = fopen('tcp');
+fid = fopen('conversations/tcp');
 tcpData = textscan(fid, '%s%d%s%d%d%d%d%d%d%d%f%f%f%f');
 fclose(fid);
-fid = fopen('udp');
+fid = fopen('conversations/udp');
 udpData = textscan(fid, '%s%d%s%d%d%d%d%d%d%d%f%f%f%f');
 fclose(fid);
 
