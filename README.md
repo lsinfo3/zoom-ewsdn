@@ -2,10 +2,10 @@
 The scripts provided in this repository were created in context of the evaluation of the [ZOOM ODL Module](https://github.com/lsinfo3/zoom-odl) using [Matlab](http://de.mathworks.com/products/matlab/).
 
 #### Provided result files
-The files provided within the `results` directory have been generated during the evaluation of the [ZOOM ODL Module](https://github.com/lsinfo3/zoom-odl) and have been used for its evaluation.
+The tcp and udp conversation files provided within the respective `results` directories have been generated during the evaluation of the [ZOOM ODL Module](https://github.com/lsinfo3/zoom-odl) and have been used for its evaluation.
 
 #### Provided conversation files
-The files provided within the `conversations` directory were used during the evaluation to establish a baseline to which the generated results have been compared. Further information on the conversation files can be found in a seperate [readme file](https://github.com/lsinfo3/zoom-netsoft/tree/master/conversations).
+The files provided within the respective `results` directory were used during the evaluation to establish a baseline to which the generated results have been compared. Further information on the conversation files can be found in a seperate [readme file](https://github.com/lsinfo3/zoom-netsoft/tree/master/conversations).
 
 #### Provided functionality
 The scripts provided deliver all functionality that is needed to reproduce the figures used in [LINK THE PAPER](...).

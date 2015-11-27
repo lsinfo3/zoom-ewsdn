@@ -18,26 +18,9 @@
 % OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 % THE SOFTWARE.
 
-paperUnits = 'centimeters';
-printTitle = 0;
-dpi = 600;
-fontsize = 11;
-linewidth = 2;
-sizex = 10;
-sizey = 5;
-legendpos = 'NorthWest';
-%
-fid = fopen('conversations/tcp');
-tcpData = textscan(fid, '%s%d%s%d%d%d%d%d%d%d%f%f%f%f');
-fclose(fid);
-fid = fopen('conversations/udp');
-udpData = textscan(fid, '%s%d%s%d%d%d%d%d%d%d%f%f%f%f');
-fclose(fid);
+clear all;
 
-
-% Uncommented since this takes quite long.
-%avgActiveFlows = getAvgActiveFlows(tcpData, udpData);
-
+%% Generate a struct that contains all parameter combinations
 
 algorithm='ZoomTT';
 temp = struct('algorithm', algorithm, 'nflows', 256, 'ntop', 5, 'time', 1); resStruct = temp;
@@ -61,6 +44,7 @@ temp = struct('algorithm', algorithm, 'nflows', 256, 'ntop', 50, 'time', 2); res
 temp = struct('algorithm', algorithm, 'nflows', 256, 'ntop', 50, 'time', 5); resStruct = [resStruct; temp];
 
 algorithm='ZoomBase';
+%resStruct = [];
 temp = struct('algorithm', algorithm, 'nflows', 16, 'ntop', 8, 'time', 1); resStruct = [resStruct; temp];
 temp = struct('algorithm', algorithm, 'nflows', 16, 'ntop', 8, 'time', 2); resStruct = [resStruct; temp];
 temp = struct('algorithm', algorithm, 'nflows', 16, 'ntop', 8, 'time', 5); resStruct = [resStruct; temp];
@@ -85,26 +69,82 @@ temp = struct('algorithm', algorithm, 'nflows', 2, 'ntop', 1, 'time', 1); resStr
 temp = struct('algorithm', algorithm, 'nflows', 2, 'ntop', 1, 'time', 2); resStruct = [resStruct; temp];
 temp = struct('algorithm', algorithm, 'nflows', 2, 'ntop', 1, 'time', 5); resStruct = [resStruct; temp];
 
+clear temp algorithm;
+
+%% Setup configuration variables
+
+paperUnits = 'centimeters';
+printTitle = 0;
+dpi = 600;
+fontsize = 11;
+linewidth = 2;
+sizex = 10;
+sizey = 5;
+legendpos = 'NorthWest';
+
+
+%% Read conversation files for all result folders and define output folder to save figures
+%input = {'results_waikato_0_60', 'results_waikato_60_120'};
+%output = 'figures_waikato';
+input = {'results_ISPDSL-II'};
+output = 'figures_ISPDSL-II';
+for i=1:length(input)
+    input{i}
+    fid = fopen(strcat(input{i},'/tcp'));
+    convData(i).tcpData = textscan(fid, '%s%d%s%d%d%d%d%d%d%d%f%f%f%f');
+    fclose(fid);
+    fid = fopen(strcat(input{i},'/udp'));
+    convData(i).udpData = textscan(fid, '%s%d%s%d%d%d%d%d%d%d%f%f%f%f');
+    fclose(fid);
+end
+
+
+%% Get generic statistics about flows from the conversation files
+% >>> This takes pretty long <<<
+%traceStats = getFlowStats(convData(i).tcpData, convData(i).udpData);
+
+%% This part prepares the data and plots/saves all generic figures
+% The data can also be loaded from the result .mat files
+
 deviation=[1 2 4 8];
 deviationColor = copper(4);
 
 deviationStyle = ['-', '-', '-', '-'];
 
+inputMatch = [];
 for v=1:length(resStruct)
     resStruct(v)
-    mkdir(strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/'));
-    currentDir = strcat('results/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/');
-    files = dir(currentDir);
-    files = files(~[files.isdir]);
-    files = sort_nat({files.name});
+    mkdir(strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/'));
+    fileStruct = [];
+    for i=1:length(input)
+        currentDir = strcat(input{i},'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/');    
+        files = dir(currentDir);
+        files = files(~[files.isdir]);
+        files = sort_nat({files.name});
+        for j=1:length(files)
+            tmpStruct(j).file = files{j};
+            tmpStruct(j).dir = currentDir;
+            tmpStruct(j).input = i;
+        end
+        fileStruct = [fileStruct, tmpStruct];
+    end
+    %currentDir = strcat(input,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/');
+    %files = dir(currentDir);
+    %files = files(~[files.isdir]);
+    %files = sort_nat({files.name});
     accuracy = [];
     ci = [];
     tolerance = [];
     for t=1:length(deviation)
         data = struct('fP',[],'fN',[],'mse',[], 'fPnoDev', []);
-        for k=1:length(files)
-            fid = fopen(strcat(currentDir, files{k}));
-            tmp = strsplit(files{k}, '_');
+        for k=1:length(fileStruct)
+            file = fileStruct(k).file;
+            currentDir = fileStruct(k).dir;
+            inputMatch = fileStruct(k).input;
+            tcpData = convData(inputMatch).tcpData;
+            udpData = convData(inputMatch).udpData;
+            fid = fopen(strcat(currentDir, file));
+            tmp = strsplit(file, '_');
             time = str2double(tmp(2));     
             if (strcmp(resStruct(v).algorithm,'ZoomBase'))
                 A = findFlowsAtTime(tcpData, udpData, time);
@@ -183,9 +223,9 @@ for v=1:length(resStruct)
         set(fig, 'PaperPosition', [0 0 sizex sizey]);
         xlabel('False Positive Rate');
         ylabel('CDF');
-        saveas(fig, strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falsePosRate'), 'png'); 
-        saveas(fig, strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falsePosRate'), 'fig');
-        save2pdf(strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falsePosRate'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
+        saveas(fig, strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falsePosRate'), 'png'); 
+        saveas(fig, strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falsePosRate'), 'fig');
+        save2pdf(strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falsePosRate'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
         close;
     fig = figure(2);
         set(gca,'FontSize',fontsize);
@@ -200,9 +240,9 @@ for v=1:length(resStruct)
         legend(num2str(deviation(1)), num2str(deviation(2)), num2str(deviation(3)), num2str(deviation(4))); 
         set(fig, 'PaperUnits', paperUnits);
         set(fig, 'PaperPosition', [0 0 sizex sizey]);
-        saveas(fig, strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falsePosAbs'), 'png'); 
-        saveas(fig, strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falsePosAbs'), 'fig');
-        save2pdf(strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falsePosAbs'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
+        saveas(fig, strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falsePosAbs'), 'png'); 
+        saveas(fig, strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falsePosAbs'), 'fig');
+        save2pdf(strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falsePosAbs'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
         close;
     fig = figure(3);
         set(gca,'FontSize',fontsize);
@@ -219,9 +259,9 @@ for v=1:length(resStruct)
         ylabel('CDF');
         set(fig, 'PaperUnits', paperUnits);
         set(fig, 'PaperPosition', [0 0 sizex sizey]);
-        saveas(fig, strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegRate'), 'png');
-        saveas(fig, strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegRate'), 'fig');
-        save2pdf(strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegRate'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
+        saveas(fig, strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegRate'), 'png');
+        saveas(fig, strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegRate'), 'fig');
+        save2pdf(strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegRate'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
         close;
     fig = figure(4);
         set(gca,'FontSize',fontsize);
@@ -238,9 +278,9 @@ for v=1:length(resStruct)
         ylabel('CDF');
         set(fig, 'PaperUnits', paperUnits);
         set(fig, 'PaperPosition', [0 0 sizex sizey]);
-        saveas(fig, strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegAbs'), 'png'); 
-        saveas(fig, strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegAbs'), 'fig');
-        save2pdf(strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegAbs'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
+        saveas(fig, strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegAbs'), 'png'); 
+        saveas(fig, strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegAbs'), 'fig');
+        save2pdf(strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegAbs'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
         close;
     fig = figure(5); hold on;
         set(gca,'FontSize',fontsize);
@@ -257,11 +297,13 @@ for v=1:length(resStruct)
         end
         set(fig, 'PaperUnits', paperUnits);
         set(fig, 'PaperPosition', [0 0 sizex sizey]);
-        saveas(fig, strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegPosSingle'), 'png'); 
-        saveas(fig, strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegPosSingle'), 'fig');
-        save2pdf(strcat('figures/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegPosSingle'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
+        saveas(fig, strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegPosSingle'), 'png'); 
+        saveas(fig, strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegPosSingle'), 'fig');
+        save2pdf(strcat(output,'/', resStruct(v).algorithm, '/', num2str(resStruct(v).nflows), '/', num2str(resStruct(v).ntop), '/', num2str(resStruct(v).time), '/falseNegPosSingle'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
         close;
 end
+
+%% Plot paper figures
 
 linewidth = 0.5;
 paperUnits = 'centimeters';
@@ -283,11 +325,13 @@ cols = copper(5);
 cols(1,:) = [];
 errorbar_groups(vector', errorvector', 'bar_colors', cols, 'FigID', fig);
 box on;
+set(gca,'Ytick',linspace(0,1,6));
 set(gca,'XTickLabel',{'1', '4', '8'});
 legend('1', '2', '4', '8', 'Location', legendpos);
 xlabel('n_{top}');
 ylabel('Accuracy');
-save2pdf('figures/accuracy_161', fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
+ylim([0 1]);
+save2pdf(strcat(output, '/accuracy_161'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
 close(fig);
 
 fig = figure();
@@ -301,11 +345,13 @@ cols = copper(5);
 cols(1,:) = [];
 errorbar_groups(vector', errorvector', 'bar_colors', cols, 'FigID', fig);
 box on;
+set(gca,'Ytick',linspace(0,1,6));
 set(gca,'XTickLabel',{'1', '4', '8'});
 legend('1', '2', '4', '8', 'Location', legendpos);
 xlabel('n_{top}');
 ylabel('Accuracy');
-save2pdf('figures/accuracy_162', fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
+ylim([0 1]);
+save2pdf(strcat(output, '/accuracy_162'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
 close(fig);
 
 fig = figure();
@@ -319,11 +365,13 @@ cols = copper(5);
 cols(1,:) = [];
 errorbar_groups(vector', errorvector', 'bar_colors', cols, 'FigID', fig);
 box on;
+set(gca,'Ytick',linspace(0,1,6));
 set(gca,'XTickLabel',{'1', '4', '8'});
 legend('1', '2', '4', '8', 'Location', legendpos);
 xlabel('n_{top}');
 ylabel('Accuracy');
-save2pdf('figures/accuracy_165', fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
+ylim([0 1]);
+save2pdf(strcat(output, '/accuracy_165'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
 close(fig);
 
 fig = figure();
@@ -335,11 +383,13 @@ cols = copper(5);
 cols(1,:) = [];
 errorbar_groups(vector', errorvector', 'bar_colors', cols, 'FigID', fig);
 box on;
+set(gca,'Ytick',linspace(0,1,6));
 set(gca,'XTickLabel',{'1', '2'});
 legend('1', '2', '4', '8', 'Location', legendpos);
 xlabel('n_{top}');
 ylabel('Accuracy');
-save2pdf('figures/accuracy_41', fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
+ylim([0 1]);
+save2pdf(strcat(output, '/accuracy_41'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
 close(fig);
 
 fig = figure();
@@ -351,11 +401,13 @@ cols = copper(5);
 cols(1,:) = [];
 errorbar_groups(vector', errorvector', 'bar_colors', cols, 'FigID', fig);
 box on;
+set(gca,'Ytick',linspace(0,1,6));
 set(gca,'XTickLabel',{'1', '2'});
 legend('1', '2', '4', '8', 'Location', legendpos);
 xlabel('n_{top}');
 ylabel('Accuracy');
-save2pdf('figures/accuracy_42', fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
+ylim([0 1]);
+save2pdf(strcat(output, '/accuracy_42'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
 close(fig);
 
 fig = figure();
@@ -367,11 +419,13 @@ cols = copper(5);
 cols(1,:) = [];
 errorbar_groups(vector', errorvector', 'bar_colors', cols, 'FigID', fig);
 box on;
+set(gca,'Ytick',linspace(0,1,6));
 set(gca,'XTickLabel',{'1', '2'});
 legend('1', '2', '4', '8', 'Location', legendpos);
 xlabel('n_{top}');
 ylabel('Accuracy');
-save2pdf('figures/accuracy_45', fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
+ylim([0 1]);
+save2pdf(strcat(output, '/accuracy_45'), fig, dpi, fontsize, linewidth, [0 0 sizex sizey]);
 close(fig);
 
 fig = figure();
@@ -389,11 +443,13 @@ cols = copper(5);
 cols(1,:) = [];
 errorbar_groups(vector', errorvector', 'bar_colors', cols, 'FigID', fig);
 box on;
+set(gca,'Ytick',linspace(0,1,6));
 set(gca,'XTickLabel',{'5', '10', '20', '30', '50'});
 legend('1', '2', '4', '8', 'Location', 'NorthEastOutside');
 xlabel('n_{top}');
 ylabel('Accuracy');
-save2pdf('figures/accuracy_2561', fig, dpi, fontsize, linewidth, [0 0 sizex*2+1 sizey]);
+ylim([0 1]);
+save2pdf(strcat(output, '/accuracy_2561'), fig, dpi, fontsize, linewidth, [0 0 sizex*2+1 sizey]);
 close(fig);
 
 fig = figure();
@@ -411,11 +467,13 @@ cols = copper(5);
 cols(1,:) = [];
 errorbar_groups(vector', errorvector', 'bar_colors', cols, 'FigID', fig);
 box on;
+set(gca,'Ytick',linspace(0,1,6));
 set(gca,'XTickLabel',{'5', '10', '20', '30', '50'});
 legend('1', '2', '4', '8', 'Location', 'NorthEastOutside');
 xlabel('n_{top}');
 ylabel('Accuracy');
-save2pdf('figures/accuracy_2562', fig, dpi, fontsize, linewidth, [0 0 sizex*2+1 sizey]);
+ylim([0 1]);
+save2pdf(strcat(output, '/accuracy_2562'), fig, dpi, fontsize, linewidth, [0 0 sizex*2+1 sizey]);
 close(fig);
 
 fig = figure();
@@ -433,11 +491,13 @@ cols = copper(5);
 cols(1,:) = [];
 errorbar_groups(vector', errorvector', 'bar_colors', cols, 'FigID', fig);
 box on;
+set(gca,'Ytick',linspace(0,1,6));
 set(gca,'XTickLabel',{'5', '10', '20', '30', '50'});
 legend('1', '2', '4', '8', 'Location', 'NorthEastOutside');
 xlabel('n_{top}');
 ylabel('Accuracy');
-save2pdf('figures/accuracy_2565', fig, dpi, fontsize, linewidth, [0 0 sizex*2+1 sizey]);
+ylim([0 1]);
+save2pdf(strcat(output, '/accuracy_2565'), fig, dpi, fontsize, linewidth, [0 0 sizex*2+1 sizey]);
 close(fig);
 
 fig = figure();
@@ -447,10 +507,27 @@ cols = copper(5);
 cols(1,:) = [];
 [x, hb, he] = errorbar_groups(vector', errorvector', 'bar_colors', cols, 'FigID', fig, 'optional_bar_arguments', {'barwidth', 0.9});
 box on;
+set(gca,'Ytick',linspace(0,1,6));
 set(gca,'XTickLabel',{'2'});
 legend('1', '2', '4', '8', 'Location', 'NorthEastOutside');
 xlabel('t_{wait}');
-save2pdf('figures/accuracy_time', fig, dpi, fontsize, linewidth, [0 0 sizex/2 sizey]);
+ylim([0 1]);
+save2pdf(strcat(output, '/accuracy_time2'), fig, dpi, fontsize, linewidth, [0 0 sizex/2 sizey]);
+close(fig);
+
+fig = figure();
+vector = [result.ZoomBase.nflows16.ntop4.time1.accuracy];
+errorvector = [result.ZoomBase.nflows16.ntop4.time1.ci];
+cols = copper(5);
+cols(1,:) = [];
+[x, hb, he] = errorbar_groups(vector', errorvector', 'bar_colors', cols, 'FigID', fig, 'optional_bar_arguments', {'barwidth', 0.9});
+box on;
+set(gca,'Ytick',linspace(0,1,6));
+set(gca,'XTickLabel',{'1'});
+legend('1', '2', '4', '8', 'Location', 'NorthEastOutside');
+xlabel('t_{wait}');
+ylim([0 1]);
+save2pdf(strcat(output, '/accuracy_time1'), fig, dpi, fontsize, linewidth, [0 0 sizex/2 sizey]);
 close(fig);
 
 fig = figure();
@@ -464,8 +541,11 @@ cols = copper(5);
 cols(1,:) = [];
 errorbar_groups(vector', errorvector', 'bar_colors', cols, 'FigID', fig);
 box on;
+set(gca,'Ytick',linspace(0,1,6));
 set(gca,'XTickLabel',{'1', '2', '5'});
 xlabel('t_{wait}');
 ylabel('Accuracy');
-save2pdf('figures/accuracy_time_no_tolerance', fig, dpi, fontsize, linewidth, [0 0 sizex/2.97 sizey]);
+ylim([0 1]);
+save2pdf(strcat(output, '/accuracy_time_no_tolerance'), fig, dpi, fontsize, linewidth, [0 0 sizex/2.97 sizey]);
 close(fig);
+
